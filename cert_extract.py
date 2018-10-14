@@ -7,6 +7,7 @@ import subprocess
 import os
 import hashlib
 
+successful = 0
 for (dirname, subdirs, files) in os.walk("raw_certs"):
 	for filename in files:
 		if not filename.endswith(".raw"):
@@ -25,5 +26,7 @@ for (dirname, subdirs, files) in os.walk("raw_certs"):
 			x509 = subprocess.check_output([ "openssl", "x509", "-in", fullfilename, "-outform", "der" ])
 			with open(outfile, "wb") as f:
 				f.write(x509)
+			successful += 1
 		except subprocess.CalledProcessError:
 			pass
+print("%d new certificates." % (successful))
