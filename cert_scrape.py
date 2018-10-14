@@ -17,7 +17,7 @@ threads = threading.Semaphore(thread_cnt)
 gracetime = 0.5
 max_entries = 10000; randomized = False
 #max_entries = None; randomized = True
-Entry = collections.namedtuple("Entry", [ "tld", "key", "outfile" ])
+Entry = collections.namedtuple("Entry", [ "tld", "key", "outfile", "crtfile" ])
 ctr = collections.Counter()
 
 entries = [ ]
@@ -27,7 +27,8 @@ with open("top-1m.csv") as f:
 			(rank, tld) = line
 			key = hashlib.md5(tld.encode()).hexdigest()[:3]
 			outfile = "raw_certs/%s/%s.raw" % (key, tld)
-			entry = Entry(tld = tld, key = key, outfile = outfile)
+			crtfile = "certs/%s/%s.der" % (key, tld)
+			entry = Entry(tld = tld, key = key, outfile = outfile, crtfile = crtfile)
 			ctr[key] += 1
 			entries.append(entry)
 			if (max_entries is not None) and (len(ctr) == max_entries):
@@ -36,7 +37,7 @@ print("Most common keys:", ctr.most_common(10))
 print("Key directories :", len(ctr))
 
 def process_entry(entry):
-	if os.path.isfile(entry.outfile):
+	if os.path.isfile(entry.outfile) or os.path.isfile(entry.crtfile):
 		print("%s: skipped" % (entry.tld))
 		threads.release()
 		return False
@@ -51,11 +52,15 @@ def process_entry(entry):
 	with open(entry.outfile, "wb") as outfile:
 		cmd = [ "openssl", "s_client", "-connect", "%s:443" % (entry.tld), "-servername", entry.tld ]
 		proc = subprocess.Popen(cmd, stdin = subprocess.DEVNULL, stdout = outfile, stderr = subprocess.STDOUT)
-		proc.communicate()
-		if proc.returncode == 0:
-			print("%s: success" % (entry.tld))
-		else:
-			print("%s: failed" % (entry.tld))
+		try:
+			proc.wait(timeout = 15)
+			if proc.returncode == 0:
+				print("%s: success" % (entry.tld))
+			else:
+				print("%s: failed" % (entry.tld))
+		except subprocess.TimeoutExpired:
+			proc.kill()
+			print("%s: timed out" % (entry.tld))
 	time.sleep(gracetime)
 	threads.release()
 	return True
