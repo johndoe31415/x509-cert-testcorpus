@@ -15,8 +15,8 @@ import threading
 thread_cnt = 12
 threads = threading.Semaphore(thread_cnt)
 gracetime = 0.5
-max_entries = 10000; randomized = False
-#max_entries = None; randomized = True
+#max_entries = 10000; randomized = False
+max_entries = None; randomized = True
 Entry = collections.namedtuple("Entry", [ "tld", "key", "outfile", "crtfile" ])
 ctr = collections.Counter()
 
@@ -67,6 +67,8 @@ def process_entry(entry):
 
 if randomized:
 	random.shuffle(entries)
+else:
+	entries.sort()
 for entry in entries:
 	threads.acquire()
 	thread = threading.Thread(target = process_entry, args = (entry, ))
