@@ -1,8 +1,8 @@
 # x509-cert-testcorpus
-This is a corpus of about 208000 X.509 certificates in DER form, all of which
+This is a corpus of about 703000 X.509 certificates in DER form, all of which
 have been in public use in the wild. They have been scraped by using the Alexa
-top Million list and querying the first 10000 servers on the list on port 443
-for their certificate and query the remaining servers on a random basis.
+top Million list and querying every single domain name on the list on port 443
+for their certificate.
 
 The goal is to have a realistic test corpus to test tools against (shameless
 plug: I did this for my X.509 Swiss Army Knife tool [x509sak](https://github.com/johndoe31415/x509sak).
