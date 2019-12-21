@@ -5,9 +5,13 @@
 
 import os
 import sqlite3
+import hashlib
 import contextlib
+import collections
 
 class CertDB():
+	_DBEntry = collections.namedtuple("DBEntry", [ "domainname", "fetched_timet", "der_hash", "der_cert" ])
+
 	def __init__(self, sqlite_filename):
 		self._conn = sqlite3.connect(sqlite_filename)
 		self._cursor = self._conn.cursor()
@@ -15,18 +19,32 @@ class CertDB():
 			self._cursor.execute("""
 			CREATE TABLE certificates (
 				domainname varchar NOT NULL,
-				der_cert blob NOT NULL,
 				fetched_timet integer NOT NULL,
+				der_cert blob NOT NULL,
+				der_hash_md5 blob NOT NULL,
 				PRIMARY KEY(domainname, fetched_timet)
 			);
 			""")
+
+	def get_all(self):
+		for data in self._cursor.execute("SELECT domainname, fetched_timet, 0, der_cert FROM certificates;").fetchall():
+			yield self._DBEntry(*data)
+
+	def add_der(self, domainname, fetched_timet, der_cert):
+		der_hash_md5 = hashlib.md5(der_cert).digest()
+		with contextlib.suppress(sqlite3.IntegrityError):
+			self._cursor.execute("INSERT INTO certificates (domainname, fetched_timet, der_cert, der_hash_md5) VALUES (?, ?, ?, ?);", (domainname, fetched_timet, der_cert, der_hash_md5))
 
 	def add_der_from_file(self, domainname, der_filename):
 		fetched_timet = round(os.stat(der_filename).st_mtime)
 		with open(der_filename, "rb") as f:
 			der_cert = f.read()
-		with contextlib.suppress(sqlite3.IntegrityError):
-			self._cursor.execute("INSERT INTO certificates (domainname, der_cert, fetched_timet) VALUES (?, ?, ?);", (domainname, der_cert, fetched_timet))
+		self.add_der(domainname, fetched_timet, der_cert)
 
 	def commit(self):
 		self._conn.commit()
+
+	def close(self):
+		self.commit()
+		self._cursor.close()
+		self._conn.close()
