@@ -27,7 +27,7 @@ class CertDB():
 			""")
 
 	def get_all(self):
-		for data in self._cursor.execute("SELECT domainname, fetched_timet, 0, der_cert FROM certificates;").fetchall():
+		for data in self._cursor.execute("SELECT domainname, fetched_timet, der_hash_md5, der_cert FROM certificates;").fetchall():
 			yield self._DBEntry(*data)
 
 	def add_der(self, domainname, fetched_timet, der_cert):
