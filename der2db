@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+#	x509-cert-testcorpus - X.509 certificate test corpus
+#	Copyright (C) 2018-2019 Johannes Bauer
+#   License: CC-0
+
+import os
+from CertDB import CertDB
+
+for i in range(4096):
+	input_dir = "certs/%03x/" % (i)
+	output_db = "certs/%03x.db" % (i)
+	print("%s -> %s" % (input_dir, output_db))
+	db = CertDB(output_db)
+	for filename in os.listdir(input_dir):
+		if not filename.endswith(".der"):
+			continue
+		full_filename = input_dir + filename
+		domainname = filename[:-4]
+		db.add_der_from_file(domainname, full_filename)
+	db.commit()
