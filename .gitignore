@@ -2,3 +2,4 @@
 top-1m.csv
 raw_certs
 nocert
+__pycache__
