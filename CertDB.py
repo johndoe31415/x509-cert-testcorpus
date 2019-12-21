@@ -10,7 +10,7 @@ import contextlib
 import collections
 
 class CertDB():
-	_DBEntry = collections.namedtuple("DBEntry", [ "domainname", "fetched_timet", "der_hash", "der_cert" ])
+	_DBEntry = collections.namedtuple("DBEntry", [ "domainname", "fetched_timet", "der_hash_md5", "der_cert" ])
 
 	def __init__(self, sqlite_filename):
 		self._conn = sqlite3.connect(sqlite_filename)
