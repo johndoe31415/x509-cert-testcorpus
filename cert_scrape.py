@@ -3,74 +3,72 @@
 #	Copyright (C) 2018-2018 Johannes Bauer
 #   License: CC-0
 
+import sys
+import sqlite3
+import contextlib
 import subprocess
-import csv
+import multiprocessing
 import hashlib
-import collections
-import random
 import time
-import os
-import threading
+import collections
+from CertDB import CertDB
+from FriendlyArgumentParser import FriendlyArgumentParser
 
-thread_cnt = 12
-threads = threading.Semaphore(thread_cnt)
-gracetime = 0.5
-#max_entries = 10000
-max_entries = None
-Entry = collections.namedtuple("Entry", [ "tld", "key", "outfile", "crtfile" ])
-ctr = collections.Counter()
+parser = FriendlyArgumentParser(description = "Scrape certificates from websites.")
+parser.add_argument("-d", "--dbfile", metavar = "filename", type = str, default = "domainnames.sqlite3", help = "Specifies database file that contains the domain names to scrape. Defaults to %(default)s.")
+parser.add_argument("-g", "--gracetime", metavar = "secs", type = float, default = 1, help = "Gracetime between scrapings of different domains, in seconds. Defaults to %(default).1f seconds.")
+parser.add_argument("-p", "--parallel", metavar = "processes", type = int, default = 20, help = "Numer of concurrent processes that scrape. Defaults to %(default)d.")
+parser.add_argument("-t", "--timeout", metavar = "secs", type = int, default = 15, help = "Timeout after which connection is discarded, in seconds. Defaults to %(default)d.")
+parser.add_argument("-a", "--maxage", metavar = "days", type = int, default = 365, help = "Maximum age after which another attempt is retried, in days. Defaults to %(default)d.")
+args = parser.parse_args(sys.argv[1:])
 
-entries = [ ]
-with open("top-1m.csv") as f:
-	for (lineno, line) in enumerate(csv.reader(f), 1):
-		if len(line) == 2:
-			(rank, tld) = line
-			key = hashlib.md5(tld.encode()).hexdigest()[:3]
-			outfile = "raw_certs/%s/%s.raw" % (key, tld)
-			crtfile = "certs/%s/%s.der" % (key, tld)
-			entry = Entry(tld = tld, key = key, outfile = outfile, crtfile = crtfile)
-			ctr[key] += 1
-			if (not os.path.isfile(entry.outfile)) and (not os.path.isfile(entry.crtfile)):
-				entries.append(entry)
-		if (max_entries is not None) and (lineno >= max_entries):
-			break
-print("Most common keys:", ctr.most_common(10))
-print("Key directories :", len(ctr))
-print("Entries total   :", len(entries))
+class Scraper():
+	def __init__(self, args):
+		self._args = args
+		self._db = sqlite3.connect(self._args.dbfile)
+		self._cursor = self._db.cursor()
+		self._domainnames_by_key = None
 
-def log(entry, result, entryid, entrycnt):
-	print("%5.1f%% %6d/%6d %s: %s" % (entryid / entrycnt * 100, entryid, entrycnt, entry.tld, result))
+	@staticmethod
+	def _db_key(domainname):
+		return hashlib.md5(domainname.encode("ascii")).hexdigest()[:3]
 
-def process_entry(entry, entryid, entrycnt):
-	# Create output file first
-	directory = os.path.dirname(entry.outfile)
-	try:
-		os.makedirs(directory)
-	except FileExistsError:
-		pass
-
-	with open(entry.outfile, "wb") as outfile:
-		cmd = [ "openssl", "s_client", "-connect", "%s:443" % (entry.tld), "-servername", entry.tld ]
-		proc = subprocess.Popen(cmd, stdin = subprocess.DEVNULL, stdout = outfile, stderr = subprocess.STDOUT)
+	def _scrape_certificate(self, domainname):
+		print(domainname)
+		cmd = [ "openssl", "s_client", "-connect", "%s:443" % (domainname), "-servername", domainname ]
+		proc = subprocess.Popen(cmd, stdin = subprocess.DEVNULL, stdout = subprocess.PIPE, stderr = subprocess.DEVNULL)
 		try:
-			proc.wait(timeout = 15)
+			proc.wait(timeout = self._args.timeout)
 			if proc.returncode == 0:
-				log(entry, "success", entryid, entrycnt)
+				stdout = proc.stdout.read()
+				try:
+					der_cert = subprocess.check_output([ "openssl", "x509", "-outform", "der" ], input = stdout)
+					return ("ok", der_cert)
+				except subprocess.CalledProcessError:
+					# Did not contain certificate?
+					return ("nocert", None)
 			else:
-				log(entry, "failed", entryid, entrycnt)
+				# Failed with error
+				return ("error", None)
 		except subprocess.TimeoutExpired:
+			# Process unresponsive
 			proc.kill()
-			log(entry, "timed out", entryid, entrycnt)
-	time.sleep(gracetime)
-	threads.release()
-	return True
+			return ("timeout", None)
 
-random.shuffle(entries)
+	def run(self):
+		before_timet = time.time() - (86400 * self._args.maxage)
+		domainnames = [ row[0] for row in self._cursor.execute("SELECT domainname FROM domainnames WHERE last_attempted_timet < ?;", (before_timet, )).fetchall() ]
+		print("Found %d domainnames to scrape." % (len(domainnames)))
 
-for (entryid, entry) in enumerate(entries):
-	threads.acquire()
-	thread = threading.Thread(target = process_entry, args = (entry, entryid, len(entries)))
-	thread.start()
+		# Group them by database key
+		self._domainnames_by_key = collections.defaultdict(list)
+		for domainname in domainnames:
+			key = self._db_key(domainname)
+			self._domainnames_by_key[key].append(domainname)
+		print("Grouped domainnames into %d keys." % (len(self._domainnames_by_key)))
 
-for i in range(thread_cnt):
-	threads.acquire()
+
+
+scraper = Scraper(args)
+#scraper.run()
+scraper._scrape_certificate("johannes-bauer.com")
