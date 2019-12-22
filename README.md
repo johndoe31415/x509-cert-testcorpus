@@ -10,17 +10,33 @@ plug: I did this for my X.509 Swiss Army Knife tool [x509sak](https://github.com
 Since scraping takes a long time, it made sense to me to publish the whole
 corpus so other people don't have to do the scraping themselves.
 
-## Directory structure
-All X.509 certificates are DER-encoded. The subdirectory naming scheme is the
-first three digits of the MD5 hash of the hostname (which was also used in the
-SNI X.509 extension). For example:
+## Database structure
+All X.509 certificates are DER-encoded. The database naming scheme is the first
+three digits of the MD5 hash of the hostname (which was also used in the SNI
+X.509 extension). For example:
 
 ```
 $ echo -n duckduckgo.com | md5sum
 afb1343ad1b196be360351319e8aa000  -
-$ ls certs/afb/duck*
--rw------- 1 joe joe 1,6K   12.10.2018 12:10:36 certs/afb/duckduckgo.com.der
+$ ls certs/afb.db
+-rw------- 1 joe joe 416K   21.12.2019 20:33:08 certs/afb.db
 ```
+
+Each database is a sqlite3 file with the following schema:
+
+```
+$ sqlite3 certs/afb.db .schema
+CREATE TABLE certificates (
+	domainname varchar NOT NULL,
+	fetched_timet integer NOT NULL,
+	der_cert blob NOT NULL,
+	der_hash_md5 blob NOT NULL,
+	PRIMARY KEY(domainname, fetched_timet)
+);
+```
+
+Certificates may be fetched for one domain multiple times. We do this so we can
+preserve older certificates as well.
 
 ## Date/time of scraping
 All of these certificates were scraped over about a week's worth of time
