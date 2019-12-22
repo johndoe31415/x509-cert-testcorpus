@@ -51,3 +51,6 @@ class CertDB():
 		self.commit()
 		self._cursor.close()
 		self._conn.close()
+
+	def __del__(self):
+		self.close()
