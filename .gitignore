@@ -1,5 +1,4 @@
 .*.swp
 top-1m.csv
-raw_certs
-nocert
+domainnames.sqlite3
 __pycache__

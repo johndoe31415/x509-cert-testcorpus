@@ -30,6 +30,9 @@ class CertDB():
 		for data in self._cursor.execute("SELECT domainname, fetched_timet, der_hash_md5, der_cert FROM certificates;").fetchall():
 			yield self._DBEntry(*data)
 
+	def get_domainname_timestamps(self):
+		return self._cursor.execute("SELECT domainname, MAX(fetched_timet) FROM certificates GROUP BY domainname;").fetchall()
+
 	def add_der(self, domainname, fetched_timet, der_cert):
 		der_hash_md5 = hashlib.md5(der_cert).digest()
 		with contextlib.suppress(sqlite3.IntegrityError):

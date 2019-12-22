@@ -42,5 +42,16 @@ preserve older certificates as well.
 All of these certificates were scraped over about a week's worth of time
 starting around 2018-10-06.
 
+## Domain name list
+To import a CSV of a domain name list, the following sources can be useful:
+
+  * http://s3.amazonaws.com/alexa-static/top-1m.csv.zip
+  * https://siteinfo.statvoo.com/dl/top-1million-sites.csv.zip
+  * http://s3-us-west-1.amazonaws.com/umbrella-static/index.html
+  * Discussion here: https://gist.github.com/chilts/7229605
+
+They are all in CSV format and can be imported using the
+`import_domainname_csv.py` script.
+
 ## License
 Everything in here is CC-0.
