@@ -139,6 +139,8 @@ class Scraper():
 		else:
 			domainnames = self._args.domainname
 		self._total_domain_count = len(domainnames)
+		if (self._args.limit is not None) and (self._args.limit < self._total_domain_count):
+			self._total_domain_count = self._args.limit
 		print("Found %d domainnames to scrape." % (self._total_domain_count))
 
 		# Group them by database key
