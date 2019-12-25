@@ -13,7 +13,7 @@ import time
 import collections
 import random
 import re
-from CertDB import CertDB
+from CertTOC import CertTOC
 from FriendlyArgumentParser import FriendlyArgumentParser
 
 parser = FriendlyArgumentParser(description = "Scrape certificates from websites.")
@@ -23,6 +23,7 @@ parser.add_argument("-p", "--parallel", metavar = "processes", type = int, defau
 parser.add_argument("-t", "--timeout", metavar = "secs", type = int, default = 15, help = "Timeout after which connection is discarded, in seconds. Defaults to %(default)d.")
 parser.add_argument("-a", "--maxage", metavar = "days", type = int, default = 365, help = "Maximum age after which another attempt is retried, in days. Defaults to %(default)d.")
 parser.add_argument("-l", "--limit", metavar = "count", type = int, help = "Quit after this amount of calls.")
+parser.add_argument("--tocdb", metavar = "filename", type = str, default = "certs/toc.sqlite3", help = "Specifies certificate database TOC file. Defaults to %(default)s.")
 parser.add_argument("domainname", nargs = "*", help = "When explicit domain names are supplied on the command line, only those are scraped and the max age is disregarded.")
 args = parser.parse_args(sys.argv[1:])
 
@@ -70,31 +71,12 @@ class Scraper():
 		self._cursor = self._db.cursor()
 		self._domainnames_by_key = None
 		self._total_domain_count = 0
+		self._cert_retriever = CertRetriever(self._args.timeout)
+		self._toc = CertTOC(self._args.tocdb)
 
 	@staticmethod
 	def _db_key(domainname):
 		return hashlib.md5(domainname.encode("ascii")).hexdigest()[:3]
-
-	def _scrape_certificate(self, domainname):
-		cmd = [ "openssl", "s_client", "-connect", "%s:443" % (domainname), "-servername", domainname ]
-		proc = subprocess.Popen(cmd, stdin = subprocess.DEVNULL, stdout = subprocess.PIPE, stderr = subprocess.DEVNULL)
-		try:
-			proc.wait(timeout = self._args.timeout)
-			if proc.returncode == 0:
-				stdout = proc.stdout.read()
-				try:
-					der_cert = subprocess.check_output([ "openssl", "x509", "-outform", "der" ], input = stdout)
-					return ("ok", der_cert)
-				except subprocess.CalledProcessError:
-					# Did not contain certificate?
-					return ("nocert", None)
-			else:
-				# Failed with error
-				return ("error", None)
-		except subprocess.TimeoutExpired:
-			# Process unresponsive
-			proc.kill()
-			return ("timeout", None)
 
 	def _worker(self, work_queue, result_queue):
 		while True:
@@ -103,7 +85,7 @@ class Scraper():
 				break
 
 			(key, domainname) = next_job
-			scraped_cert = self._scrape_certificate(domainname)
+			scraped_cert = self._cert_retriever.retrieve(domainname)
 			result = (next_job, scraped_cert)
 			result_queue.put(result)
 
@@ -136,7 +118,7 @@ class Scraper():
 			if next_result is None:
 				break
 
-			((key, domainname), (resultcode, der_cert)) = next_result
+			((key, domainname), (resultcode, der_certs)) = next_result
 			processed_count += 1
 			count_by_return[resultcode] += 1
 
@@ -151,18 +133,18 @@ class Scraper():
 			now = round(time.time())
 			if resultcode == "ok":
 				self._cursor.execute("UPDATE domainnames SET last_successful_timet = ?, last_attempted_timet = ?, last_result = ? WHERE domainname = ?;", (now, now, resultcode, domainname))
-				certdb = self._get_certdb(key)
-				certdb.add_der(domainname, now, der_cert)
+				self._toc.insert_connection(servername = domainname, fetch_timestamp = now, certs = der_certs)
 				new_cert_count += 1
 				if (new_cert_count % 1000) == 0:
 					certdb.commit()
 			else:
 				self._cursor.execute("UPDATE domainnames SET last_attempted_timet = ?, last_result = ? WHERE domainname = ?;", (now, resultcode, domainname))
 
-			if (processed_count % 1000) == 0:
+			if (processed_count % 2500) == 0:
+				self._toc.commit()
 				self._db.commit()
+		self._toc.commit()
 		self._db.commit()
-		self._get_certdb.cache_clear()
 
 	def run(self):
 		if len(self._args.domainname) == 0:
