@@ -12,7 +12,7 @@ import hashlib
 import time
 import collections
 import random
-import functools
+import re
 from CertDB import CertDB
 from FriendlyArgumentParser import FriendlyArgumentParser
 
@@ -25,6 +25,43 @@ parser.add_argument("-a", "--maxage", metavar = "days", type = int, default = 36
 parser.add_argument("-l", "--limit", metavar = "count", type = int, help = "Quit after this amount of calls.")
 parser.add_argument("domainname", nargs = "*", help = "When explicit domain names are supplied on the command line, only those are scraped and the max age is disregarded.")
 args = parser.parse_args(sys.argv[1:])
+
+class CertRetriever():
+	_CERT_RE = re.compile("-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----", flags = re.MULTILINE)
+
+	def __init__(self, timeout):
+		self._timeout = timeout
+
+	def _parse_certs(self, openssl_output):
+		output_text = openssl_output.decode("utf-8", errors = "replace")
+		certs = [ ]
+		for match in self._CERT_RE.finditer(output_text):
+			cert_text = match.group(0).encode("ascii")
+			der_cert = subprocess.check_output([ "openssl", "x509", "-outform", "der" ], input = cert_text)
+			certs.append(der_cert)
+		return certs
+
+	def retrieve(self, servername, port = 443):
+		cmd = [ "openssl", "s_client", "-showcerts", "-connect", "%s:%d" % (servername, port), "-servername", servername ]
+		proc = subprocess.Popen(cmd, stdin = subprocess.DEVNULL, stdout = subprocess.PIPE, stderr = subprocess.DEVNULL)
+		try:
+			proc.wait(timeout = self._timeout)
+			if proc.returncode == 0:
+				stdout = proc.stdout.read()
+				try:
+					der_certs = self._parse_certs(stdout)
+					return ("ok", der_certs)
+				except subprocess.CalledProcessError:
+					# Did not contain certificate?
+					return ("nocert", None)
+			else:
+				# Failed with error
+				return ("error", None)
+		except subprocess.TimeoutExpired:
+			# Process unresponsive
+			proc.kill()
+			return ("timeout", None)
+
 
 class Scraper():
 	def __init__(self, args):
@@ -88,11 +125,6 @@ class Scraper():
 		# Finally kill all workers
 		for i in range(self._args.parallel):
 			work_queue.put(None)
-
-	@functools.lru_cache(maxsize = 10)
-	def _get_certdb(self, key):
-		db_filename = "certs/%s.db" % (key)
-		return CertDB(db_filename)
 
 	def _eater(self, work_queue, result_queue):
 		processed_count = 0
