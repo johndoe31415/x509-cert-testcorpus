@@ -1,0 +1,19 @@
+#!/usr/bin/python3
+#	x509-cert-testcorpus - X.509 certificate test corpus
+#	Copyright (C) 2018-2019 Johannes Bauer
+#   License: CC-0
+
+import glob
+import sqlite3
+from CertTOC import CertTOC
+
+toc = CertTOC("newdb/toc.sqlite3")
+for filename in glob.glob("certs/[0-9a-f][0-9a-f][0-9a-f].db"):
+	print(filename)
+	conn = sqlite3.connect(filename)
+	cursor = conn.cursor()
+	for (domainname, fetched_timet, der_cert) in cursor.execute("SELECT domainname, fetched_timet, der_cert FROM certificates;").fetchall():
+		toc.insert_connection(servername = domainname, fetch_timestamp = fetched_timet, certs = [ der_cert ], leaf_only = True)
+	cursor.close()
+	conn.close()
+toc.close()
