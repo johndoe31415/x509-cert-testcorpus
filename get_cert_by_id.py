@@ -4,8 +4,6 @@
 #   License: CC-0
 
 import sys
-import datetime
-import subprocess
 from CertTOC import CertTOC
 from FriendlyArgumentParser import FriendlyArgumentParser
 
@@ -15,8 +13,5 @@ parser.add_argument("conn_id", type = int, help = "Connection ID to dump certifi
 args = parser.parse_args(sys.argv[1:])
 
 toc = CertTOC(args.toc_dbfile)
-result = toc.get_connection(args.conn_id)
-fetch_ts = datetime.datetime.utcfromtimestamp(result.fetch_timestamp).strftime("%Y-%m-%d %H:%M:%S")
-print("Connection %d to %s fetched at %s, leaf certificates %s (%d certs)" % (result.conn_id, result.servername, fetch_ts, "only" if result.leaf_only else "and CA certificates", len(result.certs)))
-for cert in result.certs:
-	print(subprocess.check_output([ "openssl", "x509", "-inform", "der" ], input = cert).decode().rstrip())
+connection = toc.get_connection(args.conn_id)
+CertTOC.dump_connection(connection)

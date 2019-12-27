@@ -8,6 +8,8 @@ import sqlite3
 import hashlib
 import contextlib
 import collections
+import datetime
+import subprocess
 from CertDB import CertDB
 
 class CertTOC():
@@ -73,6 +75,20 @@ class CertTOC():
 		cert_hashconcat = b"".join(cert_hashes)
 		with contextlib.suppress(sqlite3.IntegrityError):
 			self._cursor.execute("INSERT INTO connections (leaf_only, fetch_timestamp, servername, cert_hashes) VALUES (?, ?, ?, ?);", (leaf_only, fetch_timestamp, servername, cert_hashconcat))
+
+	@classmethod
+	def dump_connection(self, connection):
+		if connection is None:
+			print("No connection found.")
+			return
+
+		fetch_ts = datetime.datetime.utcfromtimestamp(connection.fetch_timestamp)
+		fetch_ts_str = fetch_ts.strftime("%Y-%m-%d %H:%M:%S")
+		days_ago = (datetime.datetime.utcnow() - fetch_ts).total_seconds() / 86400
+		print("Connection %d to %s fetched at %s UTC (%.0f days ago), leaf certificates %s (%d certs)" % (connection.conn_id, connection.servername, fetch_ts_str, days_ago, "only" if connection.leaf_only else "and CA certificates", len(connection.certs)))
+		for cert in connection.certs:
+			print(subprocess.check_output([ "openssl", "x509", "-inform", "der" ], input = cert).decode().rstrip())
+		print()
 
 	def commit(self):
 		for data_db in self._data_dbs:
