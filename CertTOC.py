@@ -47,6 +47,11 @@ class CertTOC():
 		certs = [ self._get_cert(cert_hash) for cert_hash in cert_hashes ]
 		return self._Connection(conn_id = conn_id, leaf_only = leaf_only, fetch_timestamp = fetch_timestamp, servername = servername, certs = certs)
 
+	def get_connections_by_servername(self, servername):
+		conn_ids = self._cursor.execute("SELECT conn_id FROM connections WHERE servername = ? ORDER BY fetch_timestamp ASC;", (servername, )).fetchall()
+		for (conn_id, ) in conn_ids:
+			yield self.get_connection(conn_id)
+
 	def _get_cert(self, cert_hash):
 		dbid = cert_hash[0]
 		cert_db = self._data_dbs[dbid]
