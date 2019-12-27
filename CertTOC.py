@@ -30,6 +30,14 @@ class CertTOC():
 
 		self._data_dbs = [ CertDB("%s/%02x.sqlite3" % (os.path.dirname(sqlite_filename), i)) for i in range(256) ]
 
+	@property
+	def connection_count(self):
+		return self._cursor.execute("SELECT COUNT(*) FROM connections;").fetchone()[0]
+
+	@property
+	def certificate_count(self):
+		return sum(data_db.certificate_count for data_db in self._data_dbs)
+
 	def get_connection(self, conn_id):
 		row = self._cursor.execute("SELECT leaf_only, fetch_timestamp, servername, cert_hashes FROM connections WHERE conn_id = ?;", (conn_id, )).fetchone()
 		if row is None:
@@ -50,6 +58,10 @@ class CertTOC():
 		cert_db = self._data_dbs[dbid]
 		cert_db.add_cert(der_cert)
 		return cert_hash
+
+	def get_all_certificates(self):
+		for data_db in self._data_dbs:
+			yield from data_db.get_all_certificates()
 
 	def insert_connection(self, servername, fetch_timestamp, certs, leaf_only = False):
 		cert_hashes = [ self._insert_cert(cert) for cert in certs ]

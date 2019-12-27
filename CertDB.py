@@ -19,7 +19,11 @@ class CertDB():
 			);
 			""")
 
-	def get_all(self):
+	@property
+	def certificate_count(self):
+		return self._cursor.execute("SELECT COUNT(*) FROM certificates;").fetchone()[0]
+
+	def get_all_certificates(self):
 		for row in self._cursor.execute("SELECT der_cert FROM certificates;").fetchall():
 			yield row[0]
 
