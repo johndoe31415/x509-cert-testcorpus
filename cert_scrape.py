@@ -69,14 +69,10 @@ class Scraper():
 		self._args = args
 		self._db = sqlite3.connect(self._args.dbfile)
 		self._cursor = self._db.cursor()
-		self._domainnames_by_key = None
+		self._domainnames = [ ]
 		self._total_domain_count = 0
 		self._cert_retriever = CertRetriever(self._args.timeout)
 		self._toc = CertTOC(self._args.tocdb)
-
-	@staticmethod
-	def _db_key(domainname):
-		return hashlib.md5(domainname.encode("ascii")).hexdigest()[:3]
 
 	def _worker(self, work_queue, result_queue):
 		while True:
@@ -84,7 +80,7 @@ class Scraper():
 			if next_job is None:
 				break
 
-			(key, domainname) = next_job
+			domainname = next_job
 			scraped_cert = self._cert_retriever.retrieve(domainname)
 			result = (next_job, scraped_cert)
 			result_queue.put(result)
@@ -94,13 +90,12 @@ class Scraper():
 
 		fed_items = 0
 		try:
-			for (key, domainnames) in sorted(self._domainnames_by_key.items()):
-				random.shuffle(domainnames)
-				for domainname in domainnames:
-					fed_items += 1
-					work_queue.put((key, domainname))
-					if (self._args.limit is not None) and (fed_items >= self._args.limit):
-						raise BreakFreeException()
+			random.shuffle(self._domainnames)
+			for domainname in self._domainnames:
+				fed_items += 1
+				work_queue.put(domainname)
+				if (self._args.limit is not None) and (fed_items >= self._args.limit):
+					raise BreakFreeException()
 		except BreakFreeException:
 			pass
 
@@ -118,7 +113,7 @@ class Scraper():
 			if next_result is None:
 				break
 
-			((key, domainname), (resultcode, der_certs)) = next_result
+			(domainname, (resultcode, der_certs)) = next_result
 			processed_count += 1
 			count_by_return[resultcode] += 1
 
@@ -128,7 +123,7 @@ class Scraper():
 				if count > 0:
 					status_str.append("%s %d / %.1f%%" % (text, count, count / processed_count * 100))
 			status_str = ", ".join(status_str)
-			print("%d/%d (%.1f%%): [%s] %s: %s (%s)" % (processed_count, self._total_domain_count, processed_count / self._total_domain_count * 100, key, domainname, resultcode, status_str))
+			print("%d/%d (%.1f%%): %s: %s (%s)" % (processed_count, self._total_domain_count, processed_count / self._total_domain_count * 100, domainname, resultcode, status_str))
 
 			now = round(time.time())
 			if resultcode == "ok":
@@ -147,22 +142,23 @@ class Scraper():
 		self._db.commit()
 
 	def run(self):
+		candidate_count = self._cursor.execute("SELECT COUNT(DISTINCT domainname) FROM domainnames;").fetchone()[0]
+
 		if len(self._args.domainname) == 0:
 			before_timet = time.time() - (86400 * self._args.maxage)
-			domainnames = [ row[0] for row in self._cursor.execute("SELECT domainname FROM domainnames WHERE last_attempted_timet < ?;", (before_timet, )).fetchall() ]
+			self._domainnames = [ row[0] for row in self._cursor.execute("SELECT domainname FROM domainnames WHERE last_attempted_timet < ?;", (before_timet, )).fetchall() ]
 		else:
-			domainnames = self._args.domainname
-		self._total_domain_count = len(domainnames)
+			self._domainnames = self._args.domainname
+		self._total_domain_count = len(self._domainnames)
+
 		if (self._args.limit is not None) and (self._args.limit < self._total_domain_count):
 			self._total_domain_count = self._args.limit
-		print("Found %d domainnames to scrape." % (self._total_domain_count))
 
-		# Group them by database key
-		self._domainnames_by_key = collections.defaultdict(list)
-		for domainname in domainnames:
-			key = self._db_key(domainname)
-			self._domainnames_by_key[key].append(domainname)
-		print("Grouped domainnames into %d keys." % (len(self._domainnames_by_key)))
+		if self._total_domain_count == 0:
+			print("Found no domainnames to scrape out of %d candidates." % (candidate_count))
+			return
+		else:
+			print("Found %d domainnames to scrape out of %d candidates." % (self._total_domain_count, candidate_count))
 
 		# Initialize subprocess queues
 		work_queue = multiprocessing.Queue(maxsize = 100)
