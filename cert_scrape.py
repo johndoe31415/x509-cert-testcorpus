@@ -73,6 +73,24 @@ class Scraper():
 		self._total_domain_count = 0
 		self._cert_retriever = CertRetriever(self._args.timeout)
 		self._toc = CertTOC(self._args.tocdb)
+		self._update_local_database()
+
+	def _update_local_database(self):
+		print("Updating local index...")
+		for (domainname_id, (servername, fetch_timestamp)) in enumerate(self._toc.get_most_recent_connections()):
+			if (domainname_id % 1000) == 0:
+				print(domainname_id)
+
+			row = self._db.execute("SELECT last_attempted_timet FROM domainnames WHERE domainname = ?;", (servername, )).fetchone()
+			if row is None:
+				# Servername not yet known in domainnames.sqlite3, insert it.
+				self._db.execute("INSERT INTO domainnames (domainname, last_successful_timet, last_attempted_timet, last_result) VALUES (?, ?, ?, 'ok');", (servername, fetch_timestamp, fetch_timestamp))
+				print("ins")
+			else:
+				last_timestamp_domainnames = row[0]
+				if last_timestamp_domainnames < fetch_timestamp:
+					# We have a newer one in the actual dataset, update metadata database
+					self._db.execute("UPDATE domainnames SET last_successful_timet = ?, last_attempted_timet = ?, last_result = 'ok' WHERE domainname = ?;", (fetch_timestamp, fetch_timestamp, servername))
 
 	def _worker(self, work_queue, result_queue):
 		while True:
@@ -123,7 +141,11 @@ class Scraper():
 				if count > 0:
 					status_str.append("%s %d / %.1f%%" % (text, count, count / processed_count * 100))
 			status_str = ", ".join(status_str)
-			print("%d/%d (%.1f%%): %s: %s (%s)" % (processed_count, self._total_domain_count, processed_count / self._total_domain_count * 100, domainname, resultcode, status_str))
+			if resultcode == "ok":
+				result_comment = " [%d certs]" % (len(der_certs))
+			else:
+				result_comment = ""
+			print("%d/%d (%.1f%%): %s: %s%s (%s)" % (processed_count, self._total_domain_count, processed_count / self._total_domain_count * 100, domainname, resultcode, result_comment, status_str))
 
 			now = round(time.time())
 			if resultcode == "ok":
@@ -146,6 +168,7 @@ class Scraper():
 
 		if len(self._args.domainname) == 0:
 			before_timet = time.time() - (86400 * self._args.maxage)
+			print(before_timet)
 			self._domainnames = [ row[0] for row in self._cursor.execute("SELECT domainname FROM domainnames WHERE last_attempted_timet < ?;", (before_timet, )).fetchall() ]
 		else:
 			self._domainnames = self._args.domainname
@@ -158,7 +181,7 @@ class Scraper():
 			print("Found no domainnames to scrape out of %d candidates." % (candidate_count))
 			return
 		else:
-			print("Found %d domainnames to scrape out of %d candidates." % (self._total_domain_count, candidate_count))
+			print("Found %d domainnames (%d originally) to scrape out of %d candidates." % (self._total_domain_count, len(self._domainnames), candidate_count))
 
 		# Initialize subprocess queues
 		work_queue = multiprocessing.Queue(maxsize = 100)

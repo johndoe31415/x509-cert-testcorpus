@@ -74,6 +74,10 @@ class CertTOC():
 		for (conn_id, ) in self._cursor.execute("SELECT conn_id FROM connections ORDER BY fetch_timestamp ASC;").fetchall():
 			yield self.get_connection(conn_id)
 
+	def get_most_recent_connections(self):
+		return self._cursor.execute("SELECT servername, MAX(fetch_timestamp) FROM connections GROUP BY servername;").fetchall()
+
+
 	def insert_connection(self, servername, fetch_timestamp, certs, leaf_only = False):
 		cert_hashes = [ self._insert_cert(cert) for cert in certs ]
 		cert_hashconcat = b"".join(cert_hashes)
