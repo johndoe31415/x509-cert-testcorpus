@@ -1,6 +1,6 @@
 .*.swp
+__pycache__
 top-1m.csv
 domainnames.sqlite3
-__pycache__
-*.sqlite3-journal
 certs
+*.sqlite3-journal
