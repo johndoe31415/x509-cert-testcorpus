@@ -167,7 +167,7 @@ class Scraper():
 				self._certdb.insert_connection(servername = domainname, fetch_timestamp = now, certs = der_certs)
 				new_cert_count += 1
 				if (new_cert_count % 1000) == 0:
-					certdb.commit()
+					self._certdb.commit()
 			else:
 				self._cursor.execute("UPDATE domainnames SET last_attempted_timet = ?, last_result = ? WHERE domainname = ?;", (now, resultcode, domainname))
 
