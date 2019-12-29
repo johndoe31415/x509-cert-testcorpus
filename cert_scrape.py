@@ -87,9 +87,10 @@ class Scraper():
 			self._update_local_database()
 
 	def _update_local_database(self):
-		connection_count = self._certdb.connection_count
-		print("Updating local index from %d connections within certificate database..." % (connection_count))
-		for (entry_no, (servername, fetch_timestamp)) in enumerate(self._certdb.get_most_recent_connections()):
+		most_recent_connections = self._certdb.get_most_recent_connections()
+		connection_count = len(most_recent_connections)
+		print("Updating local index from %d recent connections within certificate database..." % (connection_count))
+		for (entry_no, (servername, fetch_timestamp)) in enumerate(most_recent_connections):
 			if (entry_no % 20000) == 0:
 				print("Updating %d/%d (%.1f%%)" % (entry_no, connection_count, entry_no / connection_count * 100))
 

@@ -96,7 +96,6 @@ class CertDatabase():
 	def get_most_recent_connections(self):
 		return self._cursor.execute("SELECT servername, MAX(fetch_timestamp) FROM connections GROUP BY servername;").fetchall()
 
-
 	def insert_connection(self, servername, fetch_timestamp, certs, leaf_only = False):
 		cert_hashes = [ self._insert_cert(cert) for cert in certs ]
 		cert_hashconcat = b"".join(cert_hashes)
