@@ -13,17 +13,17 @@ import time
 import collections
 import random
 import re
-from CertTOC import CertTOC
+from CertDatabase import CertDatabase
 from FriendlyArgumentParser import FriendlyArgumentParser
 
 parser = FriendlyArgumentParser(description = "Scrape certificates from websites.")
-parser.add_argument("-d", "--dbfile", metavar = "filename", type = str, default = "domainnames.sqlite3", help = "Specifies database file that contains the domain names to scrape. Defaults to %(default)s.")
+parser.add_argument("-d", "--domainname-dbfile", metavar = "filename", type = str, default = "certs/domainnames.sqlite3", help = "Specifies database file that contains the domain names to scrape. Defaults to %(default)s.")
 parser.add_argument("-g", "--gracetime", metavar = "secs", type = float, default = 1, help = "Gracetime between scrapings of different domains, in seconds. Defaults to %(default).1f seconds.")
 parser.add_argument("-p", "--parallel", metavar = "processes", type = int, default = 20, help = "Numer of concurrent processes that scrape. Defaults to %(default)d.")
 parser.add_argument("-t", "--timeout", metavar = "secs", type = int, default = 15, help = "Timeout after which connection is discarded, in seconds. Defaults to %(default)d.")
 parser.add_argument("-a", "--maxage", metavar = "days", type = int, default = 365, help = "Maximum age after which another attempt is retried, in days. Defaults to %(default)d.")
 parser.add_argument("-l", "--limit", metavar = "count", type = int, help = "Quit after this amount of calls.")
-parser.add_argument("--tocdb", metavar = "filename", type = str, default = "certs/toc.sqlite3", help = "Specifies certificate database TOC file. Defaults to %(default)s.")
+parser.add_argument("-c", "--certdb", metavar = "path", type = str, default = "certs", help = "Specifies the path of the certificate database. Defaults to %(default)s.")
 parser.add_argument("domainname", nargs = "*", help = "When explicit domain names are supplied on the command line, only those are scraped and the max age is disregarded.")
 args = parser.parse_args(sys.argv[1:])
 
@@ -67,17 +67,17 @@ class CertRetriever():
 class Scraper():
 	def __init__(self, args):
 		self._args = args
-		self._db = sqlite3.connect(self._args.dbfile)
+		self._db = sqlite3.connect(self._args.domainname_dbfile)
 		self._cursor = self._db.cursor()
 		self._domainnames = [ ]
 		self._total_domain_count = 0
 		self._cert_retriever = CertRetriever(self._args.timeout)
-		self._toc = CertTOC(self._args.tocdb)
+		self._certdb = CertDatabase(self._args.certdb)
 		self._update_local_database()
 
 	def _update_local_database(self):
 		print("Updating local index...")
-		for (domainname_id, (servername, fetch_timestamp)) in enumerate(self._toc.get_most_recent_connections()):
+		for (domainname_id, (servername, fetch_timestamp)) in enumerate(self._certdb.get_most_recent_connections()):
 			if (domainname_id % 1000) == 0:
 				print(domainname_id)
 
@@ -150,7 +150,7 @@ class Scraper():
 			now = round(time.time())
 			if resultcode == "ok":
 				self._cursor.execute("UPDATE domainnames SET last_successful_timet = ?, last_attempted_timet = ?, last_result = ? WHERE domainname = ?;", (now, now, resultcode, domainname))
-				self._toc.insert_connection(servername = domainname, fetch_timestamp = now, certs = der_certs)
+				self._certdb.insert_connection(servername = domainname, fetch_timestamp = now, certs = der_certs)
 				new_cert_count += 1
 				if (new_cert_count % 1000) == 0:
 					certdb.commit()
@@ -158,9 +158,9 @@ class Scraper():
 				self._cursor.execute("UPDATE domainnames SET last_attempted_timet = ?, last_result = ? WHERE domainname = ?;", (now, resultcode, domainname))
 
 			if (processed_count % 2500) == 0:
-				self._toc.commit()
+				self._certdb.commit()
 				self._db.commit()
-		self._toc.commit()
+		self._certdb.commit()
 		self._db.commit()
 
 	def run(self):
