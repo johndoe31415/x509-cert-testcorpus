@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #	x509-cert-testcorpus - X.509 certificate test corpus
-#	Copyright (C) 2018-2018 Johannes Bauer
+#	Copyright (C) 2018-2019 Johannes Bauer
 #   License: CC-0
 
 import sys
@@ -21,9 +21,10 @@ parser.add_argument("-d", "--domainname-dbfile", metavar = "filename", type = st
 parser.add_argument("-g", "--gracetime", metavar = "secs", type = float, default = 1, help = "Gracetime between scrapings of different domains, in seconds. Defaults to %(default).1f seconds.")
 parser.add_argument("-p", "--parallel", metavar = "processes", type = int, default = 20, help = "Numer of concurrent processes that scrape. Defaults to %(default)d.")
 parser.add_argument("-t", "--timeout", metavar = "secs", type = int, default = 15, help = "Timeout after which connection is discarded, in seconds. Defaults to %(default)d.")
-parser.add_argument("-a", "--maxage", metavar = "days", type = int, default = 365, help = "Maximum age after which another attempt is retried, in days. Defaults to %(default)d.")
+parser.add_argument("-a", "--maxage", metavar = "days", type = int, default = 365, help = "Age after which another attempt is retried, in days. Defaults to %(default)d.")
 parser.add_argument("-l", "--limit", metavar = "count", type = int, help = "Quit after this amount of calls.")
 parser.add_argument("-c", "--certdb", metavar = "path", type = str, default = "certs", help = "Specifies the path of the certificate database. Defaults to %(default)s.")
+parser.add_argument("--skip-local-db-update", action = "store_true", help = "Do not try to update the domainname database file from the actual certificate content database.")
 parser.add_argument("domainname", nargs = "*", help = "When explicit domain names are supplied on the command line, only those are scraped and the max age is disregarded.")
 args = parser.parse_args(sys.argv[1:])
 
@@ -69,28 +70,39 @@ class Scraper():
 		self._args = args
 		self._db = sqlite3.connect(self._args.domainname_dbfile)
 		self._cursor = self._db.cursor()
+		with contextlib.suppress(sqlite3.OperationalError):
+			self._cursor.execute("""
+			CREATE TABLE domainnames (
+				domainname PRIMARY KEY NOT NULL,
+				last_successful_timet integer NOT NULL,
+				last_attempted_timet integer NOT NULL,
+				last_result NULL
+			);
+			""")
 		self._domainnames = [ ]
 		self._total_domain_count = 0
 		self._cert_retriever = CertRetriever(self._args.timeout)
 		self._certdb = CertDatabase(self._args.certdb)
-		self._update_local_database()
+		if not self._args.skip_local_db_update:
+			self._update_local_database()
 
 	def _update_local_database(self):
-		print("Updating local index...")
-		for (domainname_id, (servername, fetch_timestamp)) in enumerate(self._certdb.get_most_recent_connections()):
-			if (domainname_id % 1000) == 0:
-				print(domainname_id)
+		connection_count = self._certdb.connection_count
+		print("Updating local index from %d connections within certificate database..." % (connection_count))
+		for (entry_no, (servername, fetch_timestamp)) in enumerate(self._certdb.get_most_recent_connections()):
+			if (entry_no % 20000) == 0:
+				print("Updating %d/%d (%.1f%%)" % (entry_no, connection_count, entry_no / connection_count * 100))
 
 			row = self._db.execute("SELECT last_attempted_timet FROM domainnames WHERE domainname = ?;", (servername, )).fetchone()
 			if row is None:
 				# Servername not yet known in domainnames.sqlite3, insert it.
 				self._db.execute("INSERT INTO domainnames (domainname, last_successful_timet, last_attempted_timet, last_result) VALUES (?, ?, ?, 'ok');", (servername, fetch_timestamp, fetch_timestamp))
-				print("ins")
 			else:
 				last_timestamp_domainnames = row[0]
 				if last_timestamp_domainnames < fetch_timestamp:
 					# We have a newer one in the actual dataset, update metadata database
 					self._db.execute("UPDATE domainnames SET last_successful_timet = ?, last_attempted_timet = ?, last_result = 'ok' WHERE domainname = ?;", (fetch_timestamp, fetch_timestamp, servername))
+		self._db.commit()
 
 	def _worker(self, work_queue, result_queue):
 		while True:
@@ -139,13 +151,14 @@ class Scraper():
 			for (keyword, text) in (("ok", "OK"), ("nocert", "No cert"), ("error", "Error"), ("timeout", "Timeout")):
 				count = count_by_return[keyword]
 				if count > 0:
-					status_str.append("%s %d / %.1f%%" % (text, count, count / processed_count * 100))
-			status_str = ", ".join(status_str)
+					status_str.append("%s %d/%.1f%%" % (text, count, count / processed_count * 100))
+			status_str = "   ".join(status_str)
 			if resultcode == "ok":
 				result_comment = " [%d certs]" % (len(der_certs))
 			else:
 				result_comment = ""
-			print("%d/%d (%.1f%%): %s: %s%s (%s)" % (processed_count, self._total_domain_count, processed_count / self._total_domain_count * 100, domainname, resultcode, result_comment, status_str))
+			line_left = "%d/%d (%.1f%%): %s: %s%s" % (processed_count, self._total_domain_count, processed_count / self._total_domain_count * 100, domainname, resultcode, result_comment)
+			print("%-90s %s" % (line_left, status_str))
 
 			now = round(time.time())
 			if resultcode == "ok":
@@ -165,23 +178,28 @@ class Scraper():
 
 	def run(self):
 		candidate_count = self._cursor.execute("SELECT COUNT(DISTINCT domainname) FROM domainnames;").fetchone()[0]
-
 		if len(self._args.domainname) == 0:
-			before_timet = time.time() - (86400 * self._args.maxage)
-			print(before_timet)
-			self._domainnames = [ row[0] for row in self._cursor.execute("SELECT domainname FROM domainnames WHERE last_attempted_timet < ?;", (before_timet, )).fetchall() ]
+			before_timet = round(time.time() - (86400 * self._args.maxage))
+			self._domainnames = [ row[0] for row in self._cursor.execute("SELECT domainname FROM domainnames WHERE COALESCE(last_attempted_timet, 0) < ?;", (before_timet, )).fetchall() ]
 		else:
 			self._domainnames = self._args.domainname
 		self._total_domain_count = len(self._domainnames)
 
 		if (self._args.limit is not None) and (self._args.limit < self._total_domain_count):
+			limited_from = self._total_domain_count
 			self._total_domain_count = self._args.limit
+		else:
+			limited_from = None
 
 		if self._total_domain_count == 0:
 			print("Found no domainnames to scrape out of %d candidates." % (candidate_count))
 			return
 		else:
-			print("Found %d domainnames (%d originally) to scrape out of %d candidates." % (self._total_domain_count, len(self._domainnames), candidate_count))
+			if limited_from is None:
+				limit_str = ""
+			else:
+				limit_str = " (limited from %d)" % (limited_from)
+			print("Found %d domainnames%s to scrape out of %d candidates." % (self._total_domain_count, limit_str, candidate_count))
 
 		# Initialize subprocess queues
 		work_queue = multiprocessing.Queue(maxsize = 100)
