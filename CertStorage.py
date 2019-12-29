@@ -15,7 +15,7 @@ class CertStorage():
 			self._cursor.execute("""
 			CREATE TABLE certificates (
 				cert_sha256 blob PRIMARY KEY,
-				der_cert blob
+				der_cert blob NOT NULL
 			);
 			""")
 
