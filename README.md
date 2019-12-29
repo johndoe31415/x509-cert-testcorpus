@@ -15,7 +15,8 @@ Because the size of the database has outgrown GitHub (GitHub LFS is too
 restrictive in the free plan and we really don't want to store the binaries
 within Git), they're now hosted as a tar.gz archive here:
 
-  * [Latest database .tar.gz from 2019-12-29 12:08:30](https://TODO)
+  * Latest certs.tar.gz from 2019-12-29 12:08:30
+  * [Downlod link](http://www.mediafire.com/file/nvx63hfwcwsn49d/certs.tar.gz/file)
   * File size 1565548898 bytes (1.5 GiB)
   * SHA256 `1ef7f2bf515dc71d7f1ffa9a57f9426b1afe7448d2bdfa8447bb16e41c12628d`
 
