@@ -15,10 +15,10 @@ Because the size of the database has outgrown GitHub (GitHub LFS is too
 restrictive in the free plan and we really don't want to store the binaries
 within Git), they're now hosted as a tar.gz archive here:
 
-  * Latest certs.tar.gz from 2019-12-29 12:08:30
-  * [Downlod link](http://www.mediafire.com/file/nvx63hfwcwsn49d/certs.tar.gz/file)
-  * File size 1565548898 bytes (1.5 GiB)
-  * SHA256 `1ef7f2bf515dc71d7f1ffa9a57f9426b1afe7448d2bdfa8447bb16e41c12628d`
+  * Latest certs.tar.gz from 2019-12-29 12:53:37
+  * [Download link](TODO)
+  * File size 1641666455 bytes (1.53 GiB)
+  * SHA256 `c8eddfb80fc2da7919e41a6b96e8cf6af0e5708852cb9fe30e531dae1ecc4402`
 
 ## Database structure
 The database contains a table of contents (TOC) Sqlite3 database and 256
