@@ -16,7 +16,7 @@ restrictive in the free plan and we really don't want to store the binaries
 within Git), they're now hosted as a tar.gz archive here:
 
   * Latest certs.tar.gz from 2019-12-29 12:53:37
-  * [Download link](TODO)
+  * [Download link](https://www.mediafire.com/file/nvx63hfwcwsn49d/certs.tar.gz/file)
   * File size 1641666455 bytes (1.53 GiB)
   * SHA256 `c8eddfb80fc2da7919e41a6b96e8cf6af0e5708852cb9fe30e531dae1ecc4402`
 
