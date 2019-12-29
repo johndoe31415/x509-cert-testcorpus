@@ -1,8 +1,8 @@
 # x509-cert-testcorpus
-This is a corpus of about 703000 X.509 certificates in DER form, all of which
-have been in public use in the wild. They have been scraped by using the Alexa
-top Million list and querying every single domain name on the list on port 443
-for their certificate.
+This is a corpus of about 1.4 million unique X.509 certificates, all of which
+have been in public use in the wild by querying about 2.1 million different TLS
+servers. They have been scraped by using server name lists like the Alexa top
+Million list and querying every single host on port 443 for their certificate.
 
 The goal is to have a realistic test corpus to test tools against (shameless
 plug: I did this for my X.509 Swiss Army Knife tool [x509sak](https://github.com/johndoe31415/x509sak).
@@ -10,37 +10,54 @@ plug: I did this for my X.509 Swiss Army Knife tool [x509sak](https://github.com
 Since scraping takes a long time, it made sense to me to publish the whole
 corpus so other people don't have to do the scraping themselves.
 
+## Certificate content
+Because the size of the database has outgrown GitHub (GitHub LFS is too
+restrictive in the free plan and we really don't want to store the binaries
+within Git), they're now hosted as a tar.gz archive here:
+
+  * [Latest database .tar.gz from 2019-12-29 12:08:30](https://TODO)
+  * File size 1565548898 bytes (1.5 GiB)
+  * SHA256 `1ef7f2bf515dc71d7f1ffa9a57f9426b1afe7448d2bdfa8447bb16e41c12628d`
+
 ## Database structure
-All X.509 certificates are DER-encoded. The database naming scheme is the first
-three digits of the MD5 hash of the hostname (which was also used in the SNI
-X.509 extension). For example:
+The database contains a table of contents (TOC) Sqlite3 database and 256
+storage Sqlite3 databases. The TOC contains SHA256 hashes over the DER encoding
+of the certificates. The first byte of the SHA256 gives the number of the
+storage database the actual cert can be found in. Thus, the TOC structure is:
 
 ```
-$ echo -n duckduckgo.com | md5sum
-afb1343ad1b196be360351319e8aa000  -
-$ ls certs/afb.db
--rw------- 1 joe joe 416K   21.12.2019 20:33:08 certs/afb.db
-```
-
-Each database is a sqlite3 file with the following schema:
-
-```
-$ sqlite3 certs/afb.db .schema
-CREATE TABLE certificates (
-	domainname varchar NOT NULL,
-	fetched_timet integer NOT NULL,
-	der_cert blob NOT NULL,
-	der_hash_md5 blob NOT NULL,
-	PRIMARY KEY(domainname, fetched_timet)
+CREATE TABLE connections (
+	conn_id integer PRIMARY KEY,
+	leaf_only boolean NOT NULL,
+	fetch_timestamp integer NOT NULL,
+	servername varchar NOT NULL,
+	cert_hashes blob NOT NULL,
+	UNIQUE(servername, fetch_timestamp)
 );
 ```
 
-Certificates may be fetched for one domain multiple times. We do this so we can
-preserve older certificates as well.
+The `leaf_only` flag indicates wether or not only the leaf (server) certificate
+was stored in the database.  This is meaningful to be able to distinguish if
+the server really returned only its server certificate or if it might have
+returned more, but those CA certificates were not stored.
+
+The `cert_hashes` is a binary string of concatenated SHA256 hashes that
+reference the presented certificates.  It is always a multiple of 32 bytes in
+length and the order is the same order in which the certificates were received
+(starting from the server certificate itself at the very front).
+
+The storage databases themselves are straightforward in their definition:
+
+```
+CREATE TABLE certificates (
+	cert_sha256 blob PRIMARY KEY,
+	der_cert blob NOT NULL
+);
+```
 
 ## Date/time of scraping
-All of these certificates were scraped over about a week's worth of time
-starting around 2018-10-06.
+A first batch of these certificates were scraped over about a week's worth of
+time starting around 2018-10-06, a second batch around 2019-12-22.
 
 ## Domain name list
 To import a CSV of a domain name list, the following sources can be useful:

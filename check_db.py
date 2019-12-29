@@ -8,6 +8,7 @@ from CertDatabase import CertDatabase
 from FriendlyArgumentParser import FriendlyArgumentParser
 
 parser = FriendlyArgumentParser(description = "Sanity check a certificate database.")
+parser.add_argument("-s", "--stats-only", action = "store_true", help = "Only print stats, do not do any modification of the database.")
 parser.add_argument("--skip-connection-check", action = "store_true", help = "Do not check if all connections have associated certificate data.")
 parser.add_argument("--skip-unused-certificate-check", action = "store_true", help = "Do not check if there are dangling certificates that are not referenced in the TOC.")
 parser.add_argument("--skip-optimization", action = "store_true", help = "Do not optimize databases as the last step.")
@@ -17,6 +18,8 @@ args = parser.parse_args(sys.argv[1:])
 certdb = CertDatabase(args.certdb)
 (conn_count, cert_count) = (certdb.connection_count, certdb.certificate_count)
 print("Analyzing database with %d connections and %d certificates." % (conn_count, cert_count))
+if args.stats_only:
+	sys.exit(0)
 
 if not args.skip_connection_check:
 	print("Checking for connections with missing certificates...")
