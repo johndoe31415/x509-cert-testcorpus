@@ -4,14 +4,14 @@
 #   License: CC-0
 
 import sys
-from CertTOC import CertTOC
+from CertDatabase import CertDatabase
 from FriendlyArgumentParser import FriendlyArgumentParser
 
 parser = FriendlyArgumentParser(description = "Search certificate database for a certificate which contains the proper data.")
-parser.add_argument("-t", "--toc-dbfile", metavar = "filename", type = str, default = "certs/toc.sqlite3", help = "Specifies database file that contains the TOC. Defaults to %(default)s.")
+parser.add_argument("-c", "--certdb", metavar = "path", type = str, default = "certs", help = "Specifies the path of the certificate database. Defaults to %(default)s.")
 parser.add_argument("conn_id", type = int, help = "Connection ID to dump certificates of")
 args = parser.parse_args(sys.argv[1:])
 
-toc = CertTOC(args.toc_dbfile)
-connection = toc.get_connection(args.conn_id)
-CertTOC.dump_connection(connection)
+certdb = CertDatabase(args.certdb)
+connection = certdb.get_connection(args.conn_id)
+CertDatabase.dump_connection(connection)

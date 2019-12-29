@@ -10,13 +10,14 @@ import contextlib
 import collections
 import datetime
 import subprocess
-from CertDB import CertDB
+from CertStorage import CertStorage
 
-class CertTOC():
+class CertDatabase():
 	_Connection = collections.namedtuple("Connection", [ "conn_id", "leaf_only", "fetch_timestamp", "servername", "certs" ])
 
-	def __init__(self, sqlite_filename):
-		self._conn = sqlite3.connect(sqlite_filename)
+	def __init__(self, cert_storage_dir):
+		self._conn = None
+		self._conn = sqlite3.connect(cert_storage_dir + "/toc.sqlite3")
 		self._cursor = self._conn.cursor()
 		with contextlib.suppress(sqlite3.OperationalError):
 			self._cursor.execute("""
@@ -30,7 +31,7 @@ class CertTOC():
 			);
 			""")
 
-		self._data_dbs = [ CertDB("%s/%02x.sqlite3" % (os.path.dirname(sqlite_filename), i)) for i in range(256) ]
+		self._data_dbs = [ CertStorage("%s/%02x.sqlite3" % (cert_storage_dir, i)) for i in range(256) ]
 
 	@property
 	def connection_count(self):
@@ -53,6 +54,24 @@ class CertTOC():
 		conn_ids = self._cursor.execute("SELECT conn_id FROM connections WHERE servername = ? ORDER BY fetch_timestamp ASC;", (servername, )).fetchall()
 		for (conn_id, ) in conn_ids:
 			yield self.get_connection(conn_id)
+
+	def get_all_referenced_hashes(self):
+		referenced_hashes = set()
+		for cert_hashes in self._cursor.execute("SELECT cert_hashes FROM connections;").fetchall():
+			cert_hashes = cert_hashes[0]
+			referenced_hashes |= set(cert_hashes[i : i + 32] for i in range(0, len(cert_hashes), 32))
+		return referenced_hashes
+
+	def get_all_stored_hashes(self):
+		stored_hashes = set()
+		for data_db in self._data_dbs:
+			stored_hashes |= data_db.get_all_cert_hashes()
+		return stored_hashes
+
+	def remove_cert_from_storage(self, cert_hash):
+		dbid = cert_hash[0]
+		cert_db = self._data_dbs[dbid]
+		cert_db.remove_cert_by_hash(cert_hash)
 
 	def _get_cert(self, cert_hash):
 		dbid = cert_hash[0]
@@ -95,8 +114,19 @@ class CertTOC():
 		days_ago = (datetime.datetime.utcnow() - fetch_ts).total_seconds() / 86400
 		print("Connection %d to %s fetched at %s UTC (%.0f days ago), leaf certificates %s (%d certs)" % (connection.conn_id, connection.servername, fetch_ts_str, days_ago, "only" if connection.leaf_only else "and CA certificates", len(connection.certs)))
 		for cert in connection.certs:
-			print(subprocess.check_output([ "openssl", "x509", "-inform", "der" ], input = cert).decode().rstrip())
+			if cert is None:
+				print("No certificate present, error fetching it from storage.")
+			else:
+				print(subprocess.check_output([ "openssl", "x509", "-inform", "der" ], input = cert).decode().rstrip())
 		print()
+
+	def optimize(self):
+		for data_db in self._data_dbs:
+			data_db.optimize()
+		self._cursor.execute("VACUUM;")
+
+	def remove_connection(self, conn_id):
+		self._cursor.execute("DELETE FROM connections WHERE conn_id = ?;", (conn_id, ))
 
 	def commit(self):
 		for data_db in self._data_dbs:
