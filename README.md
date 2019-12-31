@@ -1,6 +1,6 @@
 # x509-cert-testcorpus
-This is a corpus of about 1.4 million unique X.509 certificates, all of which
-have been in public use in the wild by querying about 2.1 million different TLS
+This is a corpus of about 1.74 million unique X.509 certificates, all of which
+have been in public use in the wild by querying about 3.9 million different TLS
 servers. They have been scraped by using server name lists like the Alexa top
 Million list and querying every single host on port 443 for their certificate.
 
@@ -15,10 +15,10 @@ Because the size of the database has outgrown GitHub (GitHub LFS is too
 restrictive in the free plan and we really don't want to store the binaries
 within Git), they're now hosted as a tar.gz archive here:
 
-  * Latest certs.tar.gz from 2019-12-29 12:53:37
+  * Latest certs.tar.gz from 2019-12-31 10:30:23
   * [Download link](https://www.mediafire.com/file/nvx63hfwcwsn49d/certs.tar.gz/file)
-  * File size 1641666455 bytes (1.53 GiB)
-  * SHA256 `c8eddfb80fc2da7919e41a6b96e8cf6af0e5708852cb9fe30e531dae1ecc4402`
+  * File size 2054334870 bytes (1.91 GiB)
+  * SHA256 `04740d4e1205a2274bed78991b20f698e36e9d2b334547e6eea66a7bc702b449`
 
 ## Database structure
 The database contains a table of contents (TOC) Sqlite3 database and 256
