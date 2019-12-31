@@ -89,8 +89,8 @@ class CertDatabase():
 		for data_db in self._data_dbs:
 			yield from data_db.get_all_certificates()
 
-	def get_all_connections(self):
-		for (conn_id, ) in self._cursor.execute("SELECT conn_id FROM connections ORDER BY fetch_timestamp ASC;").fetchall():
+	def get_all_connections(self, sort_order_asc = True):
+		for (conn_id, ) in self._cursor.execute("SELECT conn_id FROM connections ORDER BY fetch_timestamp %s;" % ("ASC" if sort_order_asc else "DESC")).fetchall():
 			yield self.get_connection(conn_id)
 
 	def get_most_recent_connections(self):
