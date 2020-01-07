@@ -17,6 +17,7 @@ within Git), they're now hosted as a tar.gz archive here:
 
   * Latest certs.tar.gz from 2019-12-31 10:30:23
   * [Download link](https://www.mediafire.com/file/nvx63hfwcwsn49d/certs.tar.gz/file)
+  * [Alternative download link](https://ln2.sync.com/dl/317cba7b0/wve64v7s-exsrctnc-7bs72ket-cqrbabe5)
   * File size 2054334870 bytes (1.91 GiB)
   * SHA256 `04740d4e1205a2274bed78991b20f698e36e9d2b334547e6eea66a7bc702b449`
 
